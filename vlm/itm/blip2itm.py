@@ -6,6 +6,8 @@ from PIL import Image
 import cv2
 from ..server_wrapper import ServerMixin, host_model, send_request, str_to_image
 
+from vlm.config import VLM_BLIP2ITM_PORT
+
 try:
     from lavis.models import load_model_and_preprocess
 except ModuleNotFoundError:
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=12182)
+    parser.add_argument("--port", type=int, default=VLM_BLIP2ITM_PORT)
     args = parser.parse_args()
 
     print("Loading model...")

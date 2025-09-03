@@ -6,11 +6,12 @@ from vlm.segmentor.sam import MobileSAMClient
 from vlm.detector.grounding_dino import GroundingDINOClient
 from vlm.itm.blip2itm import BLIP2ITMClient
 from vlm.utils.get_itm_message import get_itm_message
+from vlm.config import VLM_YOLOV7_PORT, VLM_BLIP2ITM_PORT, VLM_GROUNDING_DINO_PORT, VLM_MOBILE_SAM_PORT
 
-yolov7_detector = YOLOv7Client(port=12184)
-blip2_itm = BLIP2ITMClient(port=12182)
-sam_segmentor = MobileSAMClient(port=12183)
-dino_detector = GroundingDINOClient(port=12181)
+yolov7_detector = YOLOv7Client(port=VLM_YOLOV7_PORT)
+blip2_itm = BLIP2ITMClient(port=VLM_BLIP2ITM_PORT)
+sam_segmentor = MobileSAMClient(port=VLM_MOBILE_SAM_PORT)
+dino_detector = GroundingDINOClient(port=VLM_GROUNDING_DINO_PORT)
 
 
 def get_segmentation(segmented_img, idx, detections, img, label, score, color):
@@ -197,4 +198,3 @@ def crop_and_expand_box(img, detections, idx, expand_pixels=0.4):
     img_detected = img[y_min:y_max+1, x_min:x_max+1]
 
     return img_detected
-

@@ -13,6 +13,8 @@ from ..server_wrapper import (
     str_to_image,
 )
 
+from vlm.config import VLM_MOBILE_SAM_PORT
+
 try:
     from mobile_sam import SamPredictor, sam_model_registry
 except ModuleNotFoundError:
@@ -76,7 +78,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=12183)
+    parser.add_argument("--port", type=int, default=VLM_MOBILE_SAM_PORT)
     args = parser.parse_args()
 
     print("Loading model...")

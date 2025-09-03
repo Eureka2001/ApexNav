@@ -7,6 +7,7 @@ import torch
 
 from vlm.coco_classes import COCO_CLASSES
 from vlm.detector.detections import ObjectDetections
+from vlm.config import VLM_YOLOV7_PORT
 
 from ..server_wrapper import ServerMixin, host_model, send_request, str_to_image
 
@@ -142,7 +143,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=12184)
+    parser.add_argument("--port", type=int, default=VLM_YOLOV7_PORT)
     args = parser.parse_args()
 
     print("Loading model...")
