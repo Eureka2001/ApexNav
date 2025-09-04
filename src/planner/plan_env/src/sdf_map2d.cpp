@@ -110,6 +110,8 @@ void SDFMap2D::initMap(ros::NodeHandle& nh)
   // Initialize ROS components and raycaster
   object_map2d_.reset(new ObjectMap2D(this, nh));
   value_map_.reset(new ValueMap(this, nh));
+  multi_channel_object_map_.reset(new MultiChannelObjectMap2D(this, nh));
+
   map_ros_->setMap(this);
   map_ros_->node_ = nh;
   map_ros_->init();
@@ -173,7 +175,7 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
   int point_num = points->points.size();
   if (point_num == 0)
     return;
-    
+
   // Initialize raycast tracking and clear occupancy updates
   md_->raycast_num_ += 1;
   md_->occupancy_need_clear_.clear();
@@ -203,7 +205,7 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
     auto& pt = points->points[i];
     pt_w << pt.x, pt.y;
     int tmp_flag;
-    
+
     // Process point and determine if it should be marked as occupied
     if (!isInMap(pt_w)) {
       // Find closest point in map and set as free
@@ -233,7 +235,7 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
     auto& pt = points->points[i];
     pt_w << pt.x, pt.y;
     int tmp_flag;
-    
+
     // Process point and determine occupancy flag
     if (!isInMap(pt_w)) {
       // Find closest point in map and set as free
@@ -262,7 +264,7 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
       update_mind[k] = min(update_mind[k], pt_w[k]);
       update_maxd[k] = max(update_maxd[k], pt_w[k]);
     }
-    
+
     // Skip raycasting if this ray endpoint was already processed
     if (md_->flag_rayend_[vox_adr] == md_->raycast_num_)
       continue;
@@ -320,7 +322,7 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
   md_->local_update_maxd_ = update_maxd;
   posToIndex(md_->local_update_mind_, md_->local_update_min_);
   posToIndex(md_->local_update_maxd_, md_->local_update_max_);
-  
+
   // Expand global update boundary to include current update
   for (int k = 0; k < 2; ++k) {
     md_->update_mind_[k] = min(update_mind[k], md_->update_mind_[k]);
@@ -336,12 +338,12 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
   while (!md_->cache_voxel_.empty()) {
     int adr = md_->cache_voxel_.front();
     md_->cache_voxel_.pop();
-    
+
     // Determine log-odds update based on hit/miss ratio
     double log_odds_update =
         md_->count_hit_[adr] >= md_->count_miss_[adr] ? mp_->prob_hit_log_ : mp_->prob_miss_log_;
     md_->count_hit_[adr] = md_->count_miss_[adr] = 0;
-    
+
     // Initialize unknown voxels with minimum occupancy
     if (md_->occupancy_buffer_[adr] < mp_->clamp_min_log_ - 1e-3)
       md_->occupancy_buffer_[adr] = mp_->min_occupancy_log_;
@@ -352,7 +354,7 @@ void SDFMap2D::inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& point
         std::min(std::max(md_->occupancy_buffer_[adr] + log_odds_update, mp_->clamp_min_log_),
             mp_->clamp_max_log_);
     double now_occupancy = md_->occupancy_buffer_[adr];
-    
+
     // Track voxels that changed from occupied to free for clearing inflation
     if (last_occupancy > mp_->min_occupancy_log_ && now_occupancy < mp_->min_occupancy_log_) {
       md_->occupancy_need_clear_.push_back(addressToIdx(adr));
@@ -377,7 +379,7 @@ Eigen::Vector2d SDFMap2D::closetPointInMap(
   Eigen::Vector2d max_tc = mp_->map_max_boundary_ - camera_pt;
   Eigen::Vector2d min_tc = mp_->map_min_boundary_ - camera_pt;
   double min_t = std::numeric_limits<double>::max();
-  
+
   // Check intersection with all boundary planes
   for (int i = 0; i < 2; ++i) {
     if (fabs(diff[i]) > 0) {

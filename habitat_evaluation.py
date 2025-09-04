@@ -277,7 +277,7 @@ def main(cfg: DictConfig) -> None:
         "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
     )
     common_cld_with_score_pub = rospy.Publisher(
-        "/detector/common_clouds_with_scores",
+        "/detector/multi_clouds_with_scores",
         MultipleMasksWithConfidence,
         queue_size=10,
     )

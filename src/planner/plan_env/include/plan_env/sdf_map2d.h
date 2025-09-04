@@ -33,6 +33,7 @@ struct MapParam2D;
 struct MapData2D;
 struct DetectedObject;
 class ObjectMap2D;
+class MultiChannelObjectMap2D;
 class ValueMap;
 class MapROS;
 
@@ -85,6 +86,7 @@ public:
   // Integrated mapping components
   shared_ptr<ObjectMap2D> object_map2d_;
   shared_ptr<ValueMap> value_map_;
+  shared_ptr<MultiChannelObjectMap2D> multi_channel_object_map_;
 
 private:
   // Internal map processing functions

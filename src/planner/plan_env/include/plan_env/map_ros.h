@@ -13,6 +13,7 @@
 #include <plan_env/sdf_map2d.h>
 #include <plan_env/object_map2d.h>
 #include <plan_env/value_map2d.h>
+#include <plan_env/multi_channel_object_map2d.h>
 
 // OpenCV for image processing
 #include <cv_bridge/cv_bridge.h>
@@ -66,6 +67,8 @@ private:
       const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& pose);
   void updateESDFCallback(const ros::TimerEvent& /*event*/);
   void detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
+  void multiChannelDetectedObjectCloudCallback(
+      const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
   void itmScoreCallback(const std_msgs::Float64ConstPtr& msg);
   void visCallback(const ros::TimerEvent& /*event*/);
 
@@ -116,6 +119,9 @@ private:
 
   // ROS subscribers for sensor data
   ros::Subscriber detected_object_cloud_sub_, itm_score_sub_;
+
+  // ROS subscribers for multi-channel object detection
+  ros::Subscriber multi_channel_detected_object_cloud_sub_;
 
   // ROS timers for periodic updates
   ros::Timer esdf_timer_, vis_timer_;
