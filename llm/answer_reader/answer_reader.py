@@ -1,8 +1,9 @@
 from llm.answer import get_answer
 
+
 def read_answer(llm_answer_path, llm_response_path, label, llm_client):
     label_existing = False
-
+    label = label.replace("|", "or")
     with open(llm_answer_path, "a+") as f:
         f.seek(0)
         lines = f.readlines()
@@ -25,7 +26,7 @@ def read_answer(llm_answer_path, llm_response_path, label, llm_client):
                     f"\n{label}: {response}"
                 )  # 将label和对应的response写入文件
                 print(f"Response saved to {llm_response_path}: {response}")
-                
+
     if isinstance(llm_answer[-1], str):
         room = llm_answer[-1]
         llm_answer.pop()
@@ -37,5 +38,5 @@ def read_answer(llm_answer_path, llm_response_path, label, llm_client):
         llm_answer.pop()
     else:
         raise ValueError("Score answer is not correct!!!!")
-    
+
     return llm_answer, room, fusion_score
