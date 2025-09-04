@@ -1,7 +1,11 @@
 ```bash
-# 开启 FTXUI（可能需要指定 path）
+# 开启 FTXUI（需要指定不同的 path）
 rosrun state_monitor state_monitor_node _previous_record_path:=./videos/test_hm3dv1_val/record.txt
 rosrun state_monitor state_monitor_node _previous_record_path:=./videos/test_hm3dv2_val/record.txt
+rosrun state_monitor state_monitor_node _previous_record_path:=./videos/test_mp3d_val/record.txt
+
+# 开启 RVIZ
+source ./devel/setup.bash && roslaunch exploration_manager rviz.launch
 ```
 
 ```bash
