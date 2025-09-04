@@ -32,19 +32,12 @@ import signal
 import time
 from copy import deepcopy
 
-# Third-party library imports
-from hydra import initialize, compose
-import numpy as np
-import rospy
-from geometry_msgs.msg import PoseStamped
-from omegaconf import DictConfig
-from prettytable import PrettyTable
-from sensor_msgs.msg import PointCloud2
-from std_msgs.msg import Int32, Int32MultiArray, Float32MultiArray, Float64
-import tqdm
-
 # Habitat-related imports
 import habitat
+import numpy as np
+import rospy
+import tqdm
+from geometry_msgs.msg import PoseStamped
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import (
     CollisionsMeasurementConfig,
@@ -58,8 +51,15 @@ from habitat.utils.visualizations.utils import (
     overlay_frame,
 )
 
+# Third-party library imports
+from hydra import compose, initialize
+from omegaconf import DictConfig
+
 # ROS message imports
 from plan_env.msg import MultipleMasksWithConfidence
+from prettytable import PrettyTable
+from sensor_msgs.msg import PointCloud2
+from std_msgs.msg import Float32MultiArray, Float64, Int32, Int32MultiArray
 
 # Local project imports
 from basic_utils.failure_check.count_files import count_files_in_directory
@@ -71,10 +71,11 @@ from basic_utils.record_episode.read_record import read_record
 from basic_utils.record_episode.write_record import write_record
 from habitat2ros import habitat_publisher
 from llm.answer_reader.answer_reader import read_answer
-from params import HABITAT_STATE, ROS_STATE, ACTION, RESULT_TYPES
+from params import ACTION, HABITAT_STATE, RESULT_TYPES, ROS_STATE
+from value_map.config import COMMON_OBJECTS
 from vlm.Labels import MP3D_ID_TO_NAME
 from vlm.utils.get_itm_message import get_itm_message_cosine
-from vlm.utils.get_object_utils import get_object
+from vlm.utils.get_object_utils import detect_objects, get_object
 
 
 def publish_int32(publisher, data):
@@ -275,6 +276,12 @@ def main(cfg: DictConfig) -> None:
     cld_with_score_pub = rospy.Publisher(
         "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
     )
+    common_cld_with_score_pub = rospy.Publisher(
+        "/detector/common_clouds_with_scores",
+        MultipleMasksWithConfidence,
+        queue_size=10,
+    )
+
     progress_pub = rospy.Publisher("/habitat/progress", Int32MultiArray, queue_size=10)
     record_pub = rospy.Publisher("/habitat/record", Float32MultiArray, queue_size=10)
 
@@ -292,6 +299,7 @@ def main(cfg: DictConfig) -> None:
         near_object = 0.0
         global_action = None
         cld_with_score_msg = MultipleMasksWithConfidence()
+        common_cld_with_score_msg = MultipleMasksWithConfidence()
         count_steps = 0
 
         camera_pitch = 0.0
@@ -415,6 +423,20 @@ def main(cfg: DictConfig) -> None:
             cld_with_score_msg.confidence_scores = score_list
             cld_with_score_msg.label_indices = label_list
             cld_with_score_pub.publish(cld_with_score_msg)
+
+            # Detect all objects in the current observation
+            _, common_score_list, common_masks_list, common_label_list = detect_objects(
+                COMMON_OBJECTS,
+                observations["rgb"],
+                detector_cfg,
+            )
+            common_obj_point_cloud_list = get_object_point_cloud(
+                cfg, observations, common_masks_list
+            )
+            common_cld_with_score_msg.point_clouds = common_obj_point_cloud_list
+            common_cld_with_score_msg.confidence_scores = common_score_list
+            common_cld_with_score_msg.label_indices = common_label_list
+            common_cld_with_score_pub.publish(common_cld_with_score_msg)
 
             # Generate video frame
             info = env.get_metrics()
