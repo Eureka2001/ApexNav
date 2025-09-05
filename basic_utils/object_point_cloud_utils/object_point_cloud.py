@@ -1,30 +1,98 @@
-import cv2
-import numpy as np
 import math
 
-from sensor_msgs.msg import PointCloud2, PointField
+import cv2
+import numpy as np
 import rospy
+from sensor_msgs.msg import PointCloud2, PointField
 
 from basic_utils.object_point_cloud_utils.geometry_utils import (
     get_point_cloud,
-    xyz_yaw_to_tf_matrix,
     too_offset,
     transform_points,
+    xyz_yaw_to_tf_matrix,
 )
+
+
+def get_object_point_cloud_array(
+    cfg, observations, object_masks_list
+) -> list[np.ndarray]:
+    """
+    Extract 3D point clouds for detected objects from sensor observations
+
+    This function processes depth images and object masks to generate 3D point clouds
+    for each detected object, transforming them from camera coordinates to world coordinates.
+    Returns numpy arrays instead of ROS PointCloud2 messages for easier local processing.
+
+    Args:
+        cfg: Configuration object containing sensor parameters
+        observations: Dictionary containing sensor data (depth, gps, compass)
+        object_masks_list: List of binary masks for detected objects
+
+    Returns:
+        list: List of numpy arrays for each object's point cloud [x, y, z]
+    """
+    obj_point_cloud_list = []
+    depth = observations["depth"]
+    y = observations["gps"][0]
+    x = observations["gps"][2]
+    camera_yaw = observations["compass"][0].item()
+    cfg_depth_sensor = cfg.habitat.simulator.agents.main_agent.sim_sensors.depth_sensor
+    camera_height = cfg_depth_sensor.position[1]
+    camera_min_depth = cfg_depth_sensor.min_depth
+    camera_max_depth = cfg_depth_sensor.max_depth
+    hfov = cfg_depth_sensor["hfov"]
+    height = cfg_depth_sensor["height"]
+    width = cfg_depth_sensor["width"]
+    fx = width / (2 * math.tan(hfov * np.pi / 360.0))
+    fy = height / (2 * math.tan(hfov / width * height * np.pi / 360.0))
+
+    for object_mask in object_masks_list:
+        local_cloud = extract_object_cloud(
+            depth, object_mask, camera_min_depth, camera_max_depth, fx, fy
+        )
+        camera_position = np.array([-x, -y, camera_height])
+        tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
+
+        if len(local_cloud) == 0:
+            obj_point_cloud_list.append(np.array([]))
+            continue
+
+        # Filter out points that are too far or too close
+        valid_points = local_cloud[:, 0] <= camera_max_depth * 0.95
+        valid_points &= local_cloud[:, 0] >= camera_min_depth * 1.05
+
+        # If object is too offset, skip all points
+        if too_offset(object_mask):
+            obj_point_cloud_list.append(np.array([]))
+            continue
+
+        # Apply filtering
+        local_cloud = local_cloud[valid_points]
+
+        # If no valid points remain, append empty array
+        if len(local_cloud) == 0:
+            obj_point_cloud_list.append(np.array([]))
+            continue
+
+        obj_point_cloud = transform_points(tf_camera_to_episodic, local_cloud)
+
+        obj_point_cloud_list.append(obj_point_cloud)
+
+    return obj_point_cloud_list
 
 
 def get_object_point_cloud(cfg, observations, object_masks_list):
     """
     Extract 3D point clouds for detected objects from sensor observations
-    
+
     This function processes depth images and object masks to generate 3D point clouds
     for each detected object, transforming them from camera coordinates to world coordinates.
-    
+
     Args:
         cfg: Configuration object containing sensor parameters
         observations: Dictionary containing sensor data (depth, gps, compass)
         object_masks_list: List of binary masks for detected objects
-        
+
     Returns:
         list: List of ROS PointCloud2 messages for each object
     """
@@ -79,13 +147,13 @@ def extract_object_cloud(
 ) -> np.ndarray:
     """
     Extract 3D point cloud from depth image using object mask
-    
+
     Args:
         depth: Depth image array
         object_mask: Binary mask indicating object pixels
         min_depth, max_depth: Depth sensor range limits
         fx, fy: Camera focal length parameters
-        
+
     Returns:
         np.ndarray: 3D point cloud in camera coordinates
     """
@@ -105,11 +173,11 @@ def extract_object_cloud(
 def get_random_subarray(points: np.ndarray, size: int) -> np.ndarray:
     """
     Randomly sample a subset of points from point cloud
-    
+
     Args:
         points: Input point cloud array
         size: Number of points to sample
-        
+
     Returns:
         np.ndarray: Randomly sampled subset of points
     """
@@ -122,10 +190,10 @@ def get_random_subarray(points: np.ndarray, size: int) -> np.ndarray:
 def convert_to_pointcloud2(obj_point_cloud):
     """
     Convert numpy point cloud to ROS PointCloud2 message
-    
+
     Args:
         obj_point_cloud: Numpy array of 3D points
-        
+
     Returns:
         PointCloud2: ROS message containing the point cloud
     """
