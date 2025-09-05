@@ -305,6 +305,10 @@ void MapROS::multiChannelDetectedObjectCloudCallback(
     voxel_filter.setInputCloud(single_object_cloud);
     voxel_filter.setLeafSize(0.04f, 0.04f, 0.06f);
     voxel_filter.filter(*single_object_cloud);
+    if (!single_object_cloud || single_object_cloud->points.empty()) {
+      ROS_ERROR("Single object point cloud is empty after voxel_filter!!!");
+      continue;
+    }
 
     // Filter out points beyond sensor accuracy range (>5m depth is unreliable)
     PointCloud3D::Ptr tmp_object_cloud(new PointCloud3D());
@@ -314,10 +318,17 @@ void MapROS::multiChannelDetectedObjectCloudCallback(
       tmp_object_cloud->points.push_back(object_pt);
     }
     single_object_cloud = tmp_object_cloud;
+    if (!single_object_cloud || single_object_cloud->points.empty()) {
+      ROS_ERROR("Single object point cloud is empty after depth_filter!!!");
+      continue;
+    }
 
     // Apply DBSCAN clustering to remove noise and outliers
     single_object_cloud = dbscan(single_object_cloud, 0.12f, 10);
-    if (!single_object_cloud || single_object_cloud->points.empty()) continue;
+    if (!single_object_cloud || single_object_cloud->points.empty()) {
+      ROS_ERROR("Single object point cloud is empty after dbscan!!!");
+      continue;
+    }
 
     // Accumulate filtered object data
     MultiChannelDetectedObject detected_object;
@@ -326,6 +337,16 @@ void MapROS::multiChannelDetectedObjectCloudCallback(
     detected_object.label = label;
     detected_objects.push_back(detected_object);
   }
+
+  Eigen::Matrix3d camera_r = camera_q_.toRotationMatrix();
+  ROS_INFO("Camera rotation matrix (row-major):");
+  ROS_INFO("Row 0: [%.6f, %.6f, %.6f]", camera_r(0, 0), camera_r(0, 1), camera_r(0, 2));
+  ROS_INFO("Row 1: [%.6f, %.6f, %.6f]", camera_r(1, 0), camera_r(1, 1), camera_r(1, 2));
+  ROS_INFO("Row 2: [%.6f, %.6f, %.6f]", camera_r(2, 0), camera_r(2, 1), camera_r(2, 2));
+
+  ROS_INFO("Camera position: (%.3f, %.3f, %.3f)", camera_pos_(0), camera_pos_(1), camera_pos_(2));
+  ROS_INFO("Camera orientation: w=%.3f, x=%.3f, y=%.3f, z=%.3f", camera_q_.w(), camera_q_.x(),
+      camera_q_.y(), camera_q_.z());
 
   // Process detected objects with sensor pose information
   if (!detected_objects.empty()) {
@@ -338,7 +359,7 @@ void MapROS::multiChannelDetectedObjectCloudCallback(
 
   double object_map_process_time = (ros::Time::now() - t1).toSec();
   ROS_INFO_THROTTLE(
-      2.0, "[Calculating Time] Object Map process time = %.3f s", object_map_process_time);
+      2.0, "[Calculating Time] Multi Object Map process time = %.3f s", object_map_process_time);
 }
 
 

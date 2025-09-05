@@ -19,6 +19,9 @@ MultiChannelObjectMap2D::MultiChannelObjectMap2D(
   grid_width_ = static_cast<int>(size.x() / resolution_);
   grid_height_ = static_cast<int>(size.y() / resolution_);
 
+  ROS_INFO_STREAM("MultiChannelObjectMap2D initialized with origin: ["
+                  << origin_.x() << ", " << origin_.y() << "] resolution: " << resolution_);
+
   // 初始化通道置信度地图
   channel_maps_.resize(num_channels_);
   for (int i = 0; i < num_channels_; ++i) {
@@ -68,7 +71,7 @@ void MultiChannelObjectMap2D::transformPointCloud(
   for (size_t i = 0; i < input_cloud->size(); ++i) {
     const auto& pt = input_cloud->points[i];
     Eigen::Vector3d point(pt.x, pt.y, pt.z);
-    Eigen::Vector3d transformed = sensor_pos + rotation * point;
+    Eigen::Vector3d transformed = rotation * point + sensor_pos;
     output_cloud->points[i].x = transformed.x();
     output_cloud->points[i].y = transformed.y();
     output_cloud->points[i].z = transformed.z();
@@ -97,9 +100,9 @@ bool MultiChannelObjectMap2D::worldToGrid(
   grid_idx.x() = static_cast<int>((world_pos.x() - origin_.x()) / resolution_);
   grid_idx.y() = static_cast<int>((world_pos.y() - origin_.y()) / resolution_);
 
-  // 检查是否在网格范围内
   if (grid_idx.x() < 0 || grid_idx.x() >= grid_width_ || grid_idx.y() < 0 ||
       grid_idx.y() >= grid_height_) {
+    ROS_WARN_THROTTLE(1.0, "Point (%.2f, %.2f) outside map bounds", world_pos.x(), world_pos.y());
     return false;
   }
   return true;
