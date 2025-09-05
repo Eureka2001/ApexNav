@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <plan_env/sdf_map2d.h>
+#include <nav_msgs/OccupancyGrid.h>
 
 using Eigen::Vector2d;
 using Eigen::Vector2i;
@@ -22,8 +23,9 @@ public:
   ValueMap(SDFMap2D* sdf_map, ros::NodeHandle& nh);
   ~ValueMap(){};
 
-  void updateValueMap(const Vector2d& sensor_pos, const double& sensor_yaw,
+  void updateVlfmValueMap(const Vector2d& sensor_pos, const double& sensor_yaw,
       const vector<Vector2i>& free_grids, const double& itm_score);
+  void updateCustomValueMap(const nav_msgs::OccupancyGridConstPtr& msg);
   double getValue(const Vector2d& pos);
   double getValue(const Vector2i& idx);
   double getConfidence(const Vector2d& pos);
@@ -34,8 +36,11 @@ private:
       const Vector2d& sensor_pos, const double& sensor_yaw, const Vector2d& pt_pos);
   double normalizeAngle(double angle);
 
-  vector<double> value_buffer_;  // Grid-based semantic value storage
-  vector<double> confidence_buffer_;  // Grid-based confidence storage for weighted fusion
+  vector<double> vlfm_value_buffer_;  // Grid-based semantic value storage
+  vector<double> vlfm_confidence_buffer_;  // Grid-based confidence storage for weighted fusion
+
+  vector<double> custom_value_buffer_;     // Grid-based semantic value storage
+  vector<double> custom_confidence_buffer_;  // Grid-based confidence storage for weighted fusion
 
   // Utils
   SDFMap2D* sdf_map_;
@@ -58,7 +63,7 @@ inline double ValueMap::getConfidence(const Vector2d& pos)
 inline double ValueMap::getConfidence(const Vector2i& idx)
 {
   int adr = sdf_map_->toAddress(idx);
-  return confidence_buffer_[adr];
+  return vlfm_confidence_buffer_[adr];
 }
 
 inline double ValueMap::getValue(const Vector2d& pos)

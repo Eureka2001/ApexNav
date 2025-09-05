@@ -18,11 +18,14 @@ ValueMap::ValueMap(SDFMap2D* sdf_map, ros::NodeHandle& nh)
 {
   this->sdf_map_ = sdf_map;
   int voxel_num = sdf_map_->getVoxelNum();
-  value_buffer_ = vector<double>(voxel_num, 0.0);
-  confidence_buffer_ = vector<double>(voxel_num, 0.0);
+  vlfm_value_buffer_ = vector<double>(voxel_num, 0.0);
+  vlfm_confidence_buffer_ = vector<double>(voxel_num, 0.0);
+
+  custom_value_buffer_ = vector<double>(voxel_num, 0.0);
+  custom_confidence_buffer_ = vector<double>(voxel_num, 0.0);
 }
 
-void ValueMap::updateValueMap(const Vector2d& sensor_pos, const double& sensor_yaw,
+void ValueMap::updateVlfmValueMap(const Vector2d& sensor_pos, const double& sensor_yaw,
     const vector<Vector2i>& free_grids, const double& itm_score)
 {
   for (const auto& grid : free_grids) {
@@ -35,15 +38,49 @@ void ValueMap::updateValueMap(const Vector2d& sensor_pos, const double& sensor_y
     double now_value = itm_score;
 
     // Retrieve existing confidence and value
-    double last_confidence = confidence_buffer_[adr];
-    double last_value = value_buffer_[adr];
+    double last_confidence = vlfm_confidence_buffer_[adr];
+    double last_value = vlfm_value_buffer_[adr];
 
     // Apply confidence-weighted fusion with quadratic confidence combination
-    confidence_buffer_[adr] =
+    vlfm_confidence_buffer_[adr] =
         (now_confidence * now_confidence + last_confidence * last_confidence) /
         (now_confidence + last_confidence);
-    value_buffer_[adr] = (now_confidence * now_value + last_confidence * last_value) /
+    vlfm_value_buffer_[adr] = (now_confidence * now_value + last_confidence * last_value) /
                          (now_confidence + last_confidence);
+  }
+}
+
+void ValueMap::updateCustomValueMap(const nav_msgs::OccupancyGridConstPtr& msg)
+{
+
+  // 直接将 OccupancyGrid 数据复制到 custom_value_buffer_ 中
+  int data_size = msg->data.size();
+  int buffer_size = custom_value_buffer_.size();
+  // ROS_INFO_THROTTLE(2, "msg CustomValueMap size: %d", data_size);
+  // ROS_INFO_THROTTLE(2, "custom_value_buffer_ size: %d", buffer_size);
+
+  // 确保数据大小匹配
+  if (data_size <= buffer_size) {
+    for (int i = 0; i < data_size; ++i) {
+      ROS_INFO_THROTTLE(1, "msg->data[i]: %d", msg->data[i]);
+      custom_value_buffer_[i] = static_cast<double>(msg->data[i]);
+    }
+
+    // 如果数据大小小于 buffer 大小，将剩余部分置零
+    for (int i = data_size; i < buffer_size; ++i) {
+      custom_value_buffer_[i] = 0.0;
+    }
+  }
+  else {
+    // 如果数据大小超过 buffer 大小，只复制前 buffer_size 个数据
+    for (int i = 0; i < buffer_size; ++i) {
+      custom_value_buffer_[i] = static_cast<double>(msg->data[i]);
+    }
+  }
+
+  // 更新置信度缓冲区（这里简单地将所有置信度设置为1.0）
+  for (int i = 0; i < buffer_size; ++i) {
+    custom_confidence_buffer_[i] = 1.0;
   }
 }
 

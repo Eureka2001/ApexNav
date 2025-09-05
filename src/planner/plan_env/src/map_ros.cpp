@@ -103,6 +103,9 @@ void MapROS::init()
   // multi_channel_detected_object_cloud_sub_ = node_.subscribe(
   //     "/detector/multi_clouds_with_scores", 10, &MapROS::multiChannelDetectedObjectCloudCallback, this);
 
+  custom_value_map_sub_ = node_.subscribe(
+      "/custom/value_map", 10, &MapROS::customValueMapCallback, this);
+
   // Setup synchronized subscribers for depth image and pose data
   depth_sub_.reset(
       new message_filters::Subscriber<sensor_msgs::Image>(node_, "/map_ros/depth", 20));
@@ -378,6 +381,11 @@ void MapROS::updateESDFCallback(const ros::TimerEvent& /*event*/)
   esdf_timer_.start();
 }
 
+void MapROS::customValueMapCallback(const nav_msgs::OccupancyGridConstPtr& msg)
+{
+  map_->value_map_->updateCustomValueMap(msg);
+}
+
 void MapROS::depthPoseCallback(
     const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& pose)
 {
@@ -424,7 +432,7 @@ void MapROS::depthPoseCallback(
   // Update semantic value map if ITM score is available
   // TODO: Consider expanding free_grids as they may not be comprehensive enough
   if (itm_score_ != -1.0)
-    map_->value_map_->updateValueMap(camera_pos, camera_yaw, free_grids, itm_score_);
+    map_->value_map_->updateVlfmValueMap(camera_pos, camera_yaw, free_grids, itm_score_);
   double value_map_time = (ros::Time::now() - t1).toSec();
   ROS_INFO_THROTTLE(50.0, "[Calculating Time] Value Map process time = %.3f s", value_map_time);
 

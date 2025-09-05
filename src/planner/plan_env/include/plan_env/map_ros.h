@@ -22,6 +22,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/OccupancyGrid.h>
 #include <visualization_msgs/Marker.h>
 #include <std_msgs/Float64.h>
 
@@ -69,6 +70,7 @@ private:
   void detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
   // void multiChannelDetectedObjectCloudCallback(
   //     const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
+  void customValueMapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
   void itmScoreCallback(const std_msgs::Float64ConstPtr& msg);
   void visCallback(const ros::TimerEvent& /*event*/);
 
@@ -120,8 +122,11 @@ private:
   // ROS subscribers for sensor data
   ros::Subscriber detected_object_cloud_sub_, itm_score_sub_;
 
-  // ROS subscribers for multi-channel object detection
-  ros::Subscriber multi_channel_detected_object_cloud_sub_;
+  // // ROS subscribers for multi-channel object detection
+  // ros::Subscriber multi_channel_detected_object_cloud_sub_;
+
+  // ROS subscribers for custom value map
+  ros::Subscriber custom_value_map_sub_;
 
   // ROS timers for periodic updates
   ros::Timer esdf_timer_, vis_timer_;
