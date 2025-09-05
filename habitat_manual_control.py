@@ -56,6 +56,7 @@ from basic_utils.object_point_cloud_utils.object_point_cloud import (
     get_object_point_cloud,
     get_object_point_cloud_array,
 )
+from basic_utils.perf_analysis.perf_timer import perf_timer
 
 # Local project imports
 from habitat2ros import habitat_publisher
@@ -300,25 +301,30 @@ def main(cfg: DictConfig) -> None:
         cld_with_score_msg.label_indices = label_list
         cld_with_score_pub.publish(cld_with_score_msg)
 
-        _, common_score_list, common_masks_list, common_label_list = detect_objects(
-            COMMON_OBJECTS,
-            observations["rgb"],
-            detector_cfg,
-        )
+        with perf_timer("detect_objects"):
+            _, common_score_list, common_masks_list, common_label_list = detect_objects(
+                COMMON_OBJECTS,
+                observations["rgb"],
+                detector_cfg,
+            )
 
-        common_obj_point_cloud_list = get_object_point_cloud_array(
-            cfg, observations, common_masks_list
-        )
+        with perf_timer("get_object_point_cloud_array"):
+            common_obj_point_cloud_list = get_object_point_cloud_array(
+                cfg, observations, common_masks_list
+            )
 
-        all_mask = np.ones_like(observations["depth"], dtype=np.uint8)
-        all_mask_cloud = get_object_point_cloud_array(cfg, observations, [all_mask])[0]
+            all_mask = np.ones_like(observations["depth"], dtype=np.uint8)
+            all_mask_cloud = get_object_point_cloud_array(
+                cfg, observations, [all_mask]
+            )[0]
 
-        multi_semantic_map.process_frame(
-            obj_point_cloud_list=common_obj_point_cloud_list,
-            score_list=common_score_list,
-            index_list=common_label_list,
-            all_visible_cloud=all_mask_cloud,
-        )
+        with perf_timer("process_frame"):
+            multi_semantic_map.process_frame(
+                obj_point_cloud_list=common_obj_point_cloud_list,
+                score_list=common_score_list,
+                index_list=common_label_list,
+                all_visible_cloud=all_mask_cloud,
+            )
 
         # Show updated visualization frame
         cv2.imshow("Observations", frame)

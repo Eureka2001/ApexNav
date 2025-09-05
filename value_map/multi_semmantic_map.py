@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import tf
+from sklearn.cluster import DBSCAN
 from tf.transformations import quaternion_from_euler
 
 from value_map.config import COLOR_MAP_FOR_OBJECT, COMMON_OBJECTS
@@ -107,25 +108,54 @@ class MultiSemanticMap:
         # 更新次数加1
         self.update_times[channel_index][non_zero_mask] += 1
 
+    def _denoise_channel(self, channel_index, eps=3, min_samples=5):
+        """
+        对指定通道的地图进行聚类去噪
+
+        Args:
+            channel_index: 要去噪的通道索引
+            eps: DBSCAN 的邻域半径参数
+            min_samples: DBSCAN 的核心点最小样本数
+        """
+        # 获取当前通道的地图数据
+        channel_map = self.map[channel_index]
+
+        # 找到非零点的坐标
+        nonzero_points = np.argwhere(channel_map > 0)
+
+        # 如果没有足够的点进行聚类，则直接返回
+        if len(nonzero_points) < min_samples:
+            return
+
+        # 使用DBSCAN进行聚类
+        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(nonzero_points)
+        labels = clustering.labels_
+
+        # 找到噪声点（标签为-1的点）
+        noise_mask = labels == -1
+        noise_points = nonzero_points[noise_mask]
+
+        # 将噪声点在地图上的值设为0
+        for point in noise_points:
+            self.map[channel_index, point[0], point[1]] = 0
+
     def process_frame(
         self, obj_point_cloud_list, score_list, index_list, all_visible_cloud=None
     ):
-        # 检查 3 个 list 大小相等
         if len(obj_point_cloud_list) != len(score_list) or len(
             obj_point_cloud_list
         ) != len(index_list):
             raise ValueError("All lists must have the same length")
 
-        # 检查 label list 中的 label 都在 np.arange(self.channel_num) 范围内
         if not np.all(np.isin(index_list, np.arange(self.channel_num))):
-            raise ValueError("All labels must be in the range [0, channel_num)")
+            raise ValueError("All index must be in the range [0, channel_num)")
 
         local_update = np.zeros(
             (self.channel_num, self.map_size, self.map_size), dtype=bool
         )
 
         # 对于每个 points_world 进行遍历更新
-        for points_world, score, label in zip(
+        for points_world, score, channel_index in zip(
             obj_point_cloud_list, score_list, index_list
         ):
             if len(points_world) == 0:
@@ -145,11 +175,12 @@ class MultiSemanticMap:
             local_map = np.zeros((self.map_size, self.map_size), dtype=np.float32)
             if len(valid_map_coords) > 0:
                 local_map[valid_map_coords[:, 1], valid_map_coords[:, 0]] = score
-                local_update[label, valid_map_coords[:, 1], valid_map_coords[:, 0]] = (
-                    True
-                )
+                local_update[
+                    channel_index, valid_map_coords[:, 1], valid_map_coords[:, 0]
+                ] = True
 
-            self._update_channel(label, local_map)
+            self._update_channel(channel_index, local_map)
+            self._denoise_channel(channel_index)
 
         # 对于视野内 visible 的点，但是没有在 list 更新过的，进行一次衰减
         if all_visible_cloud is not None:
