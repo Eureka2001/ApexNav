@@ -26,6 +26,7 @@ import gzip
 import json
 import os
 import signal
+import time
 from copy import deepcopy
 
 import cv2
@@ -53,12 +54,14 @@ from std_msgs.msg import Float64
 
 from basic_utils.object_point_cloud_utils.object_point_cloud import (
     get_object_point_cloud,
+    get_object_point_cloud_array,
 )
 
 # Local project imports
 from habitat2ros import habitat_publisher
 from llm.answer_reader.answer_reader import read_answer
 from value_map.config import COMMON_OBJECTS
+from value_map.multi_semmantic_map import MultiSemanticMap
 from vlm.Labels import MP3D_ID_TO_NAME
 from vlm.utils.get_itm_message import get_itm_message_cosine
 from vlm.utils.get_object_utils import detect_objects, get_object
@@ -229,6 +232,8 @@ def main(cfg: DictConfig) -> None:
     common_cld_with_score_msg = MultipleMasksWithConfidence()
     count_steps = 0
 
+    multi_semantic_map = MultiSemanticMap()
+
     # Manual control loop
     while not rospy.is_shutdown() and not env.episode_over:
         print(f"\n-------------Step: {count_steps}-------------")
@@ -297,13 +302,22 @@ def main(cfg: DictConfig) -> None:
             observations["rgb"],
             detector_cfg,
         )
-        common_obj_point_cloud_list = get_object_point_cloud(
+
+        common_obj_point_cloud_list = get_object_point_cloud_array(
             cfg, observations, common_masks_list
         )
-        common_cld_with_score_msg.point_clouds = common_obj_point_cloud_list
-        common_cld_with_score_msg.confidence_scores = common_score_list
-        common_cld_with_score_msg.label_indices = common_label_list
-        common_cld_with_score_pub.publish(common_cld_with_score_msg)
+
+        multi_semantic_map.process_frame(
+            obj_point_cloud_list=common_obj_point_cloud_list,
+            score_list=common_score_list,
+            label_list=common_label_list,
+        )
+        # tmat_camera2world = multi_semantic_map.calulate_tmat_camera2world(
+        #        observations["gps"],
+        #        observations["compass"],
+        #        camera_pitch
+        #    )
+        # multi_semantic_map.visualize_map(channel_index=0,tmat_camera2world=tmat_camera2world)
 
         # Show updated visualization frame
         cv2.imshow("Observations", frame)
