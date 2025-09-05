@@ -310,10 +310,14 @@ def main(cfg: DictConfig) -> None:
             cfg, observations, common_masks_list
         )
 
+        all_mask = np.ones_like(observations["depth"], dtype=np.uint8)
+        all_mask_cloud = get_object_point_cloud_array(cfg, observations, [all_mask])[0]
+
         multi_semantic_map.process_frame(
             obj_point_cloud_list=common_obj_point_cloud_list,
             score_list=common_score_list,
             index_list=common_label_list,
+            all_visible_cloud=all_mask_cloud,
         )
 
         # Show updated visualization frame
@@ -324,7 +328,7 @@ def main(cfg: DictConfig) -> None:
         #        observations["compass"],
         #        camera_pitch
         #    )
-        # multi_semantic_map.visualize_map(channel_index=0,tmat_camera2world=tmat_camera2world)
+        # multi_semantic_map.visualize_map(tmat_camera2world=tmat_camera2world)
         # obstacle_map.update_visualization()
 
     env.close()

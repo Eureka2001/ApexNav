@@ -54,7 +54,7 @@ class MultiSemanticMap:
         tmat_camera2world[:3, :3] = rotation_matrix[:3, :3]
         return tmat_camera2world
 
-    def _world_to_map_coords(self, points_world):
+    def _world_to_map_coords(self, points_world) -> np.ndarray:
         """将世界坐标转换为地图坐标"""
         map_coords = np.zeros_like(points_world[:, :2])
         map_coords[:, 0] = (
@@ -84,19 +84,32 @@ class MultiSemanticMap:
 
     def _update_channel(self, channel_index, local_map):
         """
-        更新语义地图
+        更新语义地图，使用基于计数权重的更新策略
         """
         # 确保channel_index在有效范围内
         if channel_index < 0 or channel_index >= self.channel_num:
             raise ValueError("channel_index must be in the range [0, channel_num)")
 
-        # 直接取local_map和当前语义通道的最大值
-        self.map[channel_index] = np.maximum(self.map[channel_index], local_map)
+        # 获取当前通道的地图和更新次数的副本
+        map_last = self.map[channel_index].copy()
+        update_times_last = self.update_times[channel_index].copy()
+
+        # 创建一个掩码，标识local_map中非零的位置
+        non_zero_mask = local_map > 0
+
+        # 使用加权平均更新地图
+        # 新值 = (旧值 * 更新次数 + 新值) / (更新次数 + 1)
+        self.map[channel_index][non_zero_mask] = (
+            map_last[non_zero_mask] * update_times_last[non_zero_mask]
+            + local_map[non_zero_mask]
+        ) / (update_times_last[non_zero_mask] + 1)
 
         # 更新次数加1
-        self.update_times[channel_index] += 1
+        self.update_times[channel_index][non_zero_mask] += 1
 
-    def process_frame(self, obj_point_cloud_list, score_list, index_list):
+    def process_frame(
+        self, obj_point_cloud_list, score_list, index_list, all_visible_cloud=None
+    ):
         # 检查 3 个 list 大小相等
         if len(obj_point_cloud_list) != len(score_list) or len(
             obj_point_cloud_list
@@ -107,14 +120,18 @@ class MultiSemanticMap:
         if not np.all(np.isin(index_list, np.arange(self.channel_num))):
             raise ValueError("All labels must be in the range [0, channel_num)")
 
-        # 对于每个 list 进行遍历
+        local_update = np.zeros(
+            (self.channel_num, self.map_size, self.map_size), dtype=bool
+        )
+
+        # 对于每个 points_world 进行遍历更新
         for points_world, score, label in zip(
             obj_point_cloud_list, score_list, index_list
         ):
             if len(points_world) == 0:
                 continue
 
-            # 2. 将世界坐标的点云投影到 2 维地图坐标，获得 local_map
+            # 将世界坐标的点云投影到 2 维地图坐标，获得 local_map
             map_coords = self._world_to_map_coords(points_world)
             valid_indices = (
                 (map_coords[:, 0] >= 0)
@@ -124,12 +141,31 @@ class MultiSemanticMap:
             )
             valid_map_coords = map_coords[valid_indices]
 
-            # 3. 将当前 local_map 与对应通道的 map 进行融合
+            # 将当前 local_map 与对应通道的 map 进行带计数地更新融合
             local_map = np.zeros((self.map_size, self.map_size), dtype=np.float32)
             if len(valid_map_coords) > 0:
                 local_map[valid_map_coords[:, 1], valid_map_coords[:, 0]] = score
+                local_update[label, valid_map_coords[:, 1], valid_map_coords[:, 0]] = (
+                    True
+                )
 
             self._update_channel(label, local_map)
+
+        # 对于视野内 visible 的点，但是没有在 list 更新过的，进行一次衰减
+        if all_visible_cloud is not None:
+            visible_mask = np.zeros((self.map_size, self.map_size), dtype=bool)
+            all_visible_coords = self._world_to_map_coords(all_visible_cloud)
+            valid_indices = (
+                (all_visible_coords[:, 0] >= 0)
+                & (all_visible_coords[:, 0] < self.map_size)
+                & (all_visible_coords[:, 1] >= 0)
+                & (all_visible_coords[:, 1] < self.map_size)
+            )
+            valid_visible_coords = all_visible_coords[valid_indices]
+            visible_mask[valid_visible_coords[:, 1], valid_visible_coords[:, 0]] = True
+            for channel in range(self.channel_num):
+                decay_mask = visible_mask & ~local_update[channel]
+                self.map[channel][decay_mask] *= 0.8
 
     def visualize_map(self, channel_index=None, tmat_camera2world=None):
         """
