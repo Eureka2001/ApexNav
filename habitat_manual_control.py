@@ -28,16 +28,12 @@ import os
 import signal
 from copy import deepcopy
 
-# Third-party library imports
-from hydra import initialize, compose
-import numpy as np
 import cv2
-import rospy
-from omegaconf import DictConfig
-from std_msgs.msg import Float64
 
 # Habitat-related imports
 import habitat
+import numpy as np
+import rospy
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import (
     CollisionsMeasurementConfig,
@@ -45,23 +41,27 @@ from habitat.config.default_structured_configs import (
     TopDownMapMeasurementConfig,
 )
 from habitat.sims.habitat_simulator.actions import HabitatSimActions
-from habitat.utils.visualizations.utils import (
-    observations_to_image,
-)
+from habitat.utils.visualizations.utils import observations_to_image
+
+# Third-party library imports
+from hydra import compose, initialize
+from omegaconf import DictConfig
 
 # ROS message imports
 from plan_env.msg import MultipleMasksWithConfidence
+from std_msgs.msg import Float64
 
-# Local project imports
-from habitat2ros import habitat_publisher
-from vlm.utils.get_object_utils import get_object
-from vlm.utils.get_itm_message import get_itm_message_cosine
-from llm.answer_reader.answer_reader import read_answer
 from basic_utils.object_point_cloud_utils.object_point_cloud import (
     get_object_point_cloud,
 )
-from vlm.Labels import MP3D_ID_TO_NAME
 
+# Local project imports
+from habitat2ros import habitat_publisher
+from llm.answer_reader.answer_reader import read_answer
+from value_map.config import COMMON_OBJECTS
+from vlm.Labels import MP3D_ID_TO_NAME
+from vlm.utils.get_itm_message import get_itm_message_cosine
+from vlm.utils.get_object_utils import detect_objects, get_object
 
 FORWARD_KEY = "w"
 LEFT_KEY = "a"
@@ -175,7 +175,7 @@ def main(cfg: DictConfig) -> None:
                 "collisions": CollisionsMeasurementConfig(),
             }
         )
-    
+
     # Initialize Habitat environment
     env = habitat.Env(cfg)
     print("Environment creation successful")
@@ -203,6 +203,11 @@ def main(cfg: DictConfig) -> None:
     cld_with_score_pub = rospy.Publisher(
         "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
     )
+    common_cld_with_score_pub = rospy.Publisher(
+        "/detector/multi_clouds_with_scores",
+        MultipleMasksWithConfidence,
+        queue_size=10,
+    )
     confidence_threshold_pub = rospy.Publisher(
         "/detector/confidence_threshold", Float64, queue_size=10
     )
@@ -221,6 +226,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     cld_with_score_msg = MultipleMasksWithConfidence()
+    common_cld_with_score_msg = MultipleMasksWithConfidence()
     count_steps = 0
 
     # Manual control loop
@@ -285,6 +291,19 @@ def main(cfg: DictConfig) -> None:
         cld_with_score_msg.confidence_scores = score_list
         cld_with_score_msg.label_indices = label_list
         cld_with_score_pub.publish(cld_with_score_msg)
+
+        _, common_score_list, common_masks_list, common_label_list = detect_objects(
+            COMMON_OBJECTS,
+            observations["rgb"],
+            detector_cfg,
+        )
+        common_obj_point_cloud_list = get_object_point_cloud(
+            cfg, observations, common_masks_list
+        )
+        common_cld_with_score_msg.point_clouds = common_obj_point_cloud_list
+        common_cld_with_score_msg.confidence_scores = common_score_list
+        common_cld_with_score_msg.label_indices = common_label_list
+        common_cld_with_score_pub.publish(common_cld_with_score_msg)
 
         # Show updated visualization frame
         cv2.imshow("Observations", frame)
