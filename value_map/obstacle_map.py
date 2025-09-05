@@ -179,9 +179,6 @@ class ObstacleMap:
         # 翻转图像以匹配坐标系
         display_image = np.flipud(display_image)
 
-        # 调整图像大小以便更好地显示
-        display_image = cv2.resize(display_image, (800, 800))
-
         return display_image
 
     def visualize(self):

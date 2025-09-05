@@ -64,6 +64,7 @@ from llm.answer_reader.answer_reader import read_answer
 from value_map.config import COMMON_OBJECTS
 from value_map.multi_semmantic_map import MultiSemanticMap
 from value_map.obstacle_map import ObstacleMap
+from value_map.value_map import ValueMap
 from vlm.Labels import MP3D_ID_TO_NAME
 from vlm.utils.get_itm_message import get_itm_message_cosine
 from vlm.utils.get_object_utils import detect_objects, get_object
@@ -234,8 +235,9 @@ def main(cfg: DictConfig) -> None:
     common_cld_with_score_msg = MultipleMasksWithConfidence()
     count_steps = 0
 
-    multi_semantic_map = MultiSemanticMap()
-    obstacle_map = ObstacleMap()
+    multi_semantic_map: MultiSemanticMap = MultiSemanticMap()
+    obstacle_map: ObstacleMap = ObstacleMap()
+    value_map: ValueMap = ValueMap()
     # obstacle_map.visualize()
 
     # Manual control loop
@@ -318,13 +320,16 @@ def main(cfg: DictConfig) -> None:
                 cfg, observations, [all_mask]
             )[0]
 
-        with perf_timer("process_frame"):
+        with perf_timer("update multi_semantic_map"):
             multi_semantic_map.process_frame(
                 obj_point_cloud_list=common_obj_point_cloud_list,
                 score_list=common_score_list,
                 index_list=common_label_list,
                 all_visible_cloud=all_mask_cloud,
             )
+
+        with perf_timer("update value_map"):
+            value_map.update_value_map(obstacle_map, multi_semantic_map)
 
         # Show updated visualization frame
         cv2.imshow("Observations", frame)
@@ -336,6 +341,7 @@ def main(cfg: DictConfig) -> None:
         #    )
         # multi_semantic_map.visualize_map(tmat_camera2world=tmat_camera2world)
         # obstacle_map.update_visualization()
+        # value_map.visualize_value_map()
 
     env.close()
 
