@@ -62,6 +62,7 @@ from habitat2ros import habitat_publisher
 from llm.answer_reader.answer_reader import read_answer
 from value_map.config import COMMON_OBJECTS
 from value_map.multi_semmantic_map import MultiSemanticMap
+from value_map.obstacle_map import ObstacleMap
 from vlm.Labels import MP3D_ID_TO_NAME
 from vlm.utils.get_itm_message import get_itm_message_cosine
 from vlm.utils.get_object_utils import detect_objects, get_object
@@ -233,6 +234,8 @@ def main(cfg: DictConfig) -> None:
     count_steps = 0
 
     multi_semantic_map = MultiSemanticMap()
+    obstacle_map = ObstacleMap()
+    # obstacle_map.visualize()
 
     # Manual control loop
     while not rospy.is_shutdown() and not env.episode_over:
@@ -312,15 +315,17 @@ def main(cfg: DictConfig) -> None:
             score_list=common_score_list,
             label_list=common_label_list,
         )
+
+        # Show updated visualization frame
+        cv2.imshow("Observations", frame)
+
         # tmat_camera2world = multi_semantic_map.calulate_tmat_camera2world(
         #        observations["gps"],
         #        observations["compass"],
         #        camera_pitch
         #    )
         # multi_semantic_map.visualize_map(channel_index=0,tmat_camera2world=tmat_camera2world)
-
-        # Show updated visualization frame
-        cv2.imshow("Observations", frame)
+        # obstacle_map.update_visualization()
 
     env.close()
 
