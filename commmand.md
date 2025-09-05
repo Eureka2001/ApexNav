@@ -26,3 +26,11 @@ python habitat_evaluation.py --dataset hm3dv2
 python habitat_evaluation.py --dataset mp3d
 python habitat_evaluation.py --dataset hm3dv2 test_epi_num=10 need_video=true
 ```
+
+```bash
+catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
+```
+
+```bash
+python habitat_manual_control.py --dataset hm3dv1 test_epi_num=10
+```
