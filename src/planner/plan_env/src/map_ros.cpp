@@ -100,8 +100,8 @@ void MapROS::init()
   detected_object_cloud_sub_ = node_.subscribe(
       "/detector/clouds_with_scores", 10, &MapROS::detectedObjectCloudCallback, this);
   itm_score_sub_ = node_.subscribe("/blip2/cosine_score", 10, &MapROS::itmScoreCallback, this);
-  multi_channel_detected_object_cloud_sub_ = node_.subscribe(
-      "/detector/multi_clouds_with_scores", 10, &MapROS::multiChannelDetectedObjectCloudCallback, this);
+  // multi_channel_detected_object_cloud_sub_ = node_.subscribe(
+  //     "/detector/multi_clouds_with_scores", 10, &MapROS::multiChannelDetectedObjectCloudCallback, this);
 
   // Setup synchronized subscribers for depth image and pose data
   depth_sub_.reset(
@@ -268,99 +268,99 @@ void MapROS::detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfid
       10.0, "[Calculating Time] Object Map process time = %.3f s", object_map_process_time);
 }
 
-void MapROS::multiChannelDetectedObjectCloudCallback(
-    const plan_env::MultipleMasksWithConfidenceConstPtr& msg)
-{
-  // Validate message structure consistency
-  if (!(msg->confidence_scores.size() == msg->point_clouds.size() &&
-          msg->confidence_scores.size() == msg->label_indices.size())) {
-    ROS_ERROR("[Bug] The MultipleMasksWithConfidence msg is wrong!!!");
-    return;
-  }
+// void MapROS::multiChannelDetectedObjectCloudCallback(
+//     const plan_env::MultipleMasksWithConfidenceConstPtr& msg)
+// {
+//   // Validate message structure consistency
+//   if (!(msg->confidence_scores.size() == msg->point_clouds.size() &&
+//           msg->confidence_scores.size() == msg->label_indices.size())) {
+//     ROS_ERROR("[Bug] The MultipleMasksWithConfidence msg is wrong!!!");
+//     return;
+//   }
 
-  auto t1 = ros::Time::now();
+//   auto t1 = ros::Time::now();
 
-  // Check camera orientation - only process when looking down (for better object detection)
-  Eigen::Vector3d euler = camera_q_.toRotationMatrix().eulerAngles(2, 1, 0);  // ZYX order: yaw, roll, pitch
-  if (euler[2] < 0) euler[2] += M_PI;
-  double camera_pitch = euler[2];
-  if (camera_pitch < 1.5)  // Skip if camera not tilted down enough
-    return;
+//   // Check camera orientation - only process when looking down (for better object detection)
+//   Eigen::Vector3d euler = camera_q_.toRotationMatrix().eulerAngles(2, 1, 0);  // ZYX order: yaw, roll, pitch
+//   if (euler[2] < 0) euler[2] += M_PI;
+//   double camera_pitch = euler[2];
+//   if (camera_pitch < 1.5)  // Skip if camera not tilted down enough
+//     return;
 
-  // Initialize point cloud processing tools and containers
-  pcl::VoxelGrid<Point3D> voxel_filter;
-  vector<MultiChannelDetectedObject> detected_objects;
+//   // Initialize point cloud processing tools and containers
+//   pcl::VoxelGrid<Point3D> voxel_filter;
+//   vector<MultiChannelDetectedObject> detected_objects;
 
-  // Process each detected object in the message
-  for (int i = 0; i < (int)msg->confidence_scores.size(); i++) {
-    auto cloud_msg = msg->point_clouds[i];
-    double confidence_score = msg->confidence_scores[i];
-    int label = msg->label_indices[i];
+//   // Process each detected object in the message
+//   for (int i = 0; i < (int)msg->confidence_scores.size(); i++) {
+//     auto cloud_msg = msg->point_clouds[i];
+//     double confidence_score = msg->confidence_scores[i];
+//     int label = msg->label_indices[i];
 
-    // Convert ROS message to PCL point cloud
-    PointCloud3D::Ptr single_object_cloud(new PointCloud3D());
-    pcl::fromROSMsg(cloud_msg, *single_object_cloud);
+//     // Convert ROS message to PCL point cloud
+//     PointCloud3D::Ptr single_object_cloud(new PointCloud3D());
+//     pcl::fromROSMsg(cloud_msg, *single_object_cloud);
 
-    // Apply voxel grid downsampling to reduce computational load
-    voxel_filter.setInputCloud(single_object_cloud);
-    voxel_filter.setLeafSize(0.04f, 0.04f, 0.06f);
-    voxel_filter.filter(*single_object_cloud);
-    if (!single_object_cloud || single_object_cloud->points.empty()) {
-      ROS_ERROR("Single object point cloud is empty after voxel_filter!!!");
-      continue;
-    }
+//     // Apply voxel grid downsampling to reduce computational load
+//     voxel_filter.setInputCloud(single_object_cloud);
+//     voxel_filter.setLeafSize(0.04f, 0.04f, 0.06f);
+//     voxel_filter.filter(*single_object_cloud);
+//     if (!single_object_cloud || single_object_cloud->points.empty()) {
+//       ROS_ERROR("Single object point cloud is empty after voxel_filter!!!");
+//       continue;
+//     }
 
-    // Filter out points beyond sensor accuracy range (>5m depth is unreliable)
-    PointCloud3D::Ptr tmp_object_cloud(new PointCloud3D());
-    for (auto& object_pt : single_object_cloud->points) {
-      Eigen::Vector3d object_pt3d(object_pt.x, object_pt.y, object_pt.z);
-      if ((object_pt3d - camera_pos_).norm() > depth_filter_maxdist_ - 0.10) continue;
-      tmp_object_cloud->points.push_back(object_pt);
-    }
-    single_object_cloud = tmp_object_cloud;
-    if (!single_object_cloud || single_object_cloud->points.empty()) {
-      ROS_ERROR("Single object point cloud is empty after depth_filter!!!");
-      continue;
-    }
+//     // Filter out points beyond sensor accuracy range (>5m depth is unreliable)
+//     PointCloud3D::Ptr tmp_object_cloud(new PointCloud3D());
+//     for (auto& object_pt : single_object_cloud->points) {
+//       Eigen::Vector3d object_pt3d(object_pt.x, object_pt.y, object_pt.z);
+//       if ((object_pt3d - camera_pos_).norm() > depth_filter_maxdist_ - 0.10) continue;
+//       tmp_object_cloud->points.push_back(object_pt);
+//     }
+//     single_object_cloud = tmp_object_cloud;
+//     if (!single_object_cloud || single_object_cloud->points.empty()) {
+//       ROS_ERROR("Single object point cloud is empty after depth_filter!!!");
+//       continue;
+//     }
 
-    // Apply DBSCAN clustering to remove noise and outliers
-    single_object_cloud = dbscan(single_object_cloud, 0.12f, 10);
-    if (!single_object_cloud || single_object_cloud->points.empty()) {
-      ROS_ERROR("Single object point cloud is empty after dbscan!!!");
-      continue;
-    }
+//     // Apply DBSCAN clustering to remove noise and outliers
+//     single_object_cloud = dbscan(single_object_cloud, 0.12f, 10);
+//     if (!single_object_cloud || single_object_cloud->points.empty()) {
+//       ROS_ERROR("Single object point cloud is empty after dbscan!!!");
+//       continue;
+//     }
 
-    // Accumulate filtered object data
-    MultiChannelDetectedObject detected_object;
-    detected_object.cloud = single_object_cloud;
-    detected_object.score = confidence_score;
-    detected_object.label = label;
-    detected_objects.push_back(detected_object);
-  }
+//     // Accumulate filtered object data
+//     MultiChannelDetectedObject detected_object;
+//     detected_object.cloud = single_object_cloud;
+//     detected_object.score = confidence_score;
+//     detected_object.label = label;
+//     detected_objects.push_back(detected_object);
+//   }
 
-  Eigen::Matrix3d camera_r = camera_q_.toRotationMatrix();
-  ROS_INFO("Camera rotation matrix (row-major):");
-  ROS_INFO("Row 0: [%.6f, %.6f, %.6f]", camera_r(0, 0), camera_r(0, 1), camera_r(0, 2));
-  ROS_INFO("Row 1: [%.6f, %.6f, %.6f]", camera_r(1, 0), camera_r(1, 1), camera_r(1, 2));
-  ROS_INFO("Row 2: [%.6f, %.6f, %.6f]", camera_r(2, 0), camera_r(2, 1), camera_r(2, 2));
+//   Eigen::Matrix3d camera_r = camera_q_.toRotationMatrix();
+//   ROS_INFO("Camera rotation matrix (row-major):");
+//   ROS_INFO("Row 0: [%.6f, %.6f, %.6f]", camera_r(0, 0), camera_r(0, 1), camera_r(0, 2));
+//   ROS_INFO("Row 1: [%.6f, %.6f, %.6f]", camera_r(1, 0), camera_r(1, 1), camera_r(1, 2));
+//   ROS_INFO("Row 2: [%.6f, %.6f, %.6f]", camera_r(2, 0), camera_r(2, 1), camera_r(2, 2));
 
-  ROS_INFO("Camera position: (%.3f, %.3f, %.3f)", camera_pos_(0), camera_pos_(1), camera_pos_(2));
-  ROS_INFO("Camera orientation: w=%.3f, x=%.3f, y=%.3f, z=%.3f", camera_q_.w(), camera_q_.x(),
-      camera_q_.y(), camera_q_.z());
+//   ROS_INFO("Camera position: (%.3f, %.3f, %.3f)", camera_pos_(0), camera_pos_(1), camera_pos_(2));
+//   ROS_INFO("Camera orientation: w=%.3f, x=%.3f, y=%.3f, z=%.3f", camera_q_.w(), camera_q_.x(),
+//       camera_q_.y(), camera_q_.z());
 
-  // Process detected objects with sensor pose information
-  if (!detected_objects.empty()) {
-    map_->multi_channel_object_map_->processDetectedObjects(
-      detected_objects, camera_pos_, camera_q_);
-  }
+//   // Process detected objects with sensor pose information
+//   if (!detected_objects.empty()) {
+//     map_->multi_channel_object_map_->processDetectedObjects(
+//       detected_objects, camera_pos_, camera_q_);
+//   }
 
-  // Publish semantic maps instead of raw point clouds
-  map_->multi_channel_object_map_->publishSemanticMaps();
+//   // Publish semantic maps instead of raw point clouds
+//   map_->multi_channel_object_map_->publishSemanticMaps();
 
-  double object_map_process_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(
-      2.0, "[Calculating Time] Multi Object Map process time = %.3f s", object_map_process_time);
-}
+//   double object_map_process_time = (ros::Time::now() - t1).toSec();
+//   ROS_INFO_THROTTLE(
+//       2.0, "[Calculating Time] Multi Object Map process time = %.3f s", object_map_process_time);
+// }
 
 
 void MapROS::updateESDFCallback(const ros::TimerEvent& /*event*/)

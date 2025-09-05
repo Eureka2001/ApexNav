@@ -67,8 +67,8 @@ private:
       const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& pose);
   void updateESDFCallback(const ros::TimerEvent& /*event*/);
   void detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
-  void multiChannelDetectedObjectCloudCallback(
-      const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
+  // void multiChannelDetectedObjectCloudCallback(
+  //     const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
   void itmScoreCallback(const std_msgs::Float64ConstPtr& msg);
   void visCallback(const ros::TimerEvent& /*event*/);
 

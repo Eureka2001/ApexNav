@@ -110,7 +110,7 @@ void SDFMap2D::initMap(ros::NodeHandle& nh)
   // Initialize ROS components and raycaster
   object_map2d_.reset(new ObjectMap2D(this, nh));
   value_map_.reset(new ValueMap(this, nh));
-  multi_channel_object_map_.reset(new MultiChannelObjectMap2D(this, nh));
+  // multi_channel_object_map_.reset(new MultiChannelObjectMap2D(this, nh));
 
   map_ros_->setMap(this);
   map_ros_->node_ = nh;
