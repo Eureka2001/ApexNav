@@ -313,7 +313,7 @@ def main(cfg: DictConfig) -> None:
         multi_semantic_map.process_frame(
             obj_point_cloud_list=common_obj_point_cloud_list,
             score_list=common_score_list,
-            label_list=common_label_list,
+            index_list=common_label_list,
         )
 
         # Show updated visualization frame

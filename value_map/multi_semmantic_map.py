@@ -3,12 +3,18 @@ import numpy as np
 import tf
 from tf.transformations import quaternion_from_euler
 
+from value_map.config import COLOR_MAP_FOR_OBJECT, COMMON_OBJECTS
+
 
 class MultiSemanticMap:
     def __init__(self, map_size=480, resolution=0.05, channel_num=20):
         self.map_size = map_size
         self.resolution = resolution
         self.channel_num = channel_num
+
+        self.label_to_index = {label: idx for idx, label in enumerate(COMMON_OBJECTS)}
+        if self.channel_num < len(COMMON_OBJECTS):
+            self.channel_num = len(COMMON_OBJECTS)
 
         self.map_center_x = 0.0
         self.map_center_y = 0.0
@@ -59,6 +65,23 @@ class MultiSemanticMap:
         ) / self.resolution + self.map_size / 2
         return map_coords.astype(int)
 
+    def _get_channel_index(self, label):
+        """
+        根据标签获取通道索引
+        """
+        if isinstance(label, str):
+            if label in self.label_to_index:
+                return self.label_to_index[label]
+            else:
+                raise ValueError(f"Label '{label}' not found in COMMON_OBJECTS")
+        elif isinstance(label, int):
+            if 0 <= label < self.channel_num:
+                return label
+            else:
+                raise ValueError(f"Index {label} out of range [0, {self.channel_num})")
+        else:
+            raise TypeError("Label must be either a string or an integer")
+
     def _update_channel(self, channel_index, local_map):
         """
         更新语义地图
@@ -73,20 +96,20 @@ class MultiSemanticMap:
         # 更新次数加1
         self.update_times[channel_index] += 1
 
-    def process_frame(self, obj_point_cloud_list, score_list, label_list):
+    def process_frame(self, obj_point_cloud_list, score_list, index_list):
         # 检查 3 个 list 大小相等
         if len(obj_point_cloud_list) != len(score_list) or len(
             obj_point_cloud_list
-        ) != len(label_list):
+        ) != len(index_list):
             raise ValueError("All lists must have the same length")
 
         # 检查 label list 中的 label 都在 np.arange(self.channel_num) 范围内
-        if not np.all(np.isin(label_list, np.arange(self.channel_num))):
+        if not np.all(np.isin(index_list, np.arange(self.channel_num))):
             raise ValueError("All labels must be in the range [0, channel_num)")
 
         # 对于每个 list 进行遍历
         for points_world, score, label in zip(
-            obj_point_cloud_list, score_list, label_list
+            obj_point_cloud_list, score_list, index_list
         ):
             if len(points_world) == 0:
                 continue
@@ -116,6 +139,9 @@ class MultiSemanticMap:
             channel_index: 要可视化的通道索引。如果为 None，则显示所有通道的叠加
             tmat_camera2world: 从相机坐标系到世界坐标系的变换矩阵
         """
+        if channel_index is not None and not isinstance(channel_index, int):
+            channel_index = self._get_channel_index(channel_index)
+
         if channel_index is None:
             # 为每个通道赋予不同的颜色并叠加
             # 创建一个彩色图像 (BGR格式)
@@ -123,39 +149,17 @@ class MultiSemanticMap:
                 (self.map_size, self.map_size, 3), dtype=np.float32
             )
 
-            # 为每个通道定义不同的颜色 (BGR格式)
-            colors = [
-                (255, 0, 0),  # 红色
-                (0, 255, 0),  # 绿色
-                (0, 0, 255),  # 蓝色
-                (255, 255, 0),  # 青色
-                (255, 0, 255),  # 紫色
-                (0, 255, 255),  # 黄色
-                (128, 0, 0),  # 深红色
-                (0, 128, 0),  # 深绿色
-                (0, 0, 128),  # 深蓝色
-                (128, 128, 0),  # 橄榄色
-                (128, 0, 128),  # 紫红色
-                (0, 128, 128),  # 深青色
-                (192, 192, 192),  # 银色
-                (128, 128, 128),  # 灰色
-                (0, 0, 0),  # 黑色
-                (255, 255, 255),  # 白色
-                (255, 165, 0),  # 橙色
-                (165, 42, 42),  # 棕色
-                (173, 216, 230),  # 浅蓝色
-                (238, 130, 238),  # 紫罗兰色
-            ]
-
             # 为每个通道应用颜色
-            for i in range(min(self.channel_num, len(colors))):
+            for i in range(min(self.channel_num, len(COLOR_MAP_FOR_OBJECT))):
                 channel_data = self.map[i]
                 if np.max(channel_data) > 0:
                     # 归一化通道数据
                     normalized_channel = channel_data / np.max(channel_data)
                     # 应用颜色
                     for c in range(3):  # B, G, R 通道
-                        color_value = colors[i][c] / 255.0
+                        color_value = (
+                            COLOR_MAP_FOR_OBJECT[i][2 - c] / 255.0
+                        )  # 注意BGR到RGB的转换
                         color_map_display[:, :, c] = np.maximum(
                             color_map_display[:, :, c], normalized_channel * color_value
                         )
@@ -163,6 +167,7 @@ class MultiSemanticMap:
             # 转换为 0-255 范围的 uint8 类型
             map_display = (color_map_display * 255).astype(np.uint8)
             map_display = np.flipud(map_display)
+            map_display = cv2.cvtColor(map_display, cv2.COLOR_RGB2BGR)
         else:
             # 确保channel_index在有效范围内
             if channel_index < 0 or channel_index >= self.channel_num:
